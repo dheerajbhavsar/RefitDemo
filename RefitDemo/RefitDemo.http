@@ -1,0 +1,39 @@
+@RefitDemo_HostAddress = http://localhost:5104
+
+### 1. Search an Actor/Actress by name (GET)
+GET {{RefitDemo_HostAddress}}/api/MovieDb/actors?name=Tom%20Hanks
+Accept: application/json
+
+###
+
+### 2. Search an Actor/Actress by name with ApiResponse<T> wrapper (GET)
+GET {{RefitDemo_HostAddress}}/api/MovieDb/actors/with-response?name=Cillian%20Murphy
+Accept: application/json
+
+###
+
+### 3. Get Movies of an Actor/Actress by ID (GET)
+# Example actorId: 31 (Tom Hanks)
+GET {{RefitDemo_HostAddress}}/api/MovieDb/actors/31/movies
+Accept: application/json
+
+###
+
+### 4. Add a Rating to a Movie (POST)
+# Example movieId: 550 (Fight Club)
+POST {{RefitDemo_HostAddress}}/api/MovieDb/movies/550/rating
+Content-Type: application/json
+Accept: application/json
+
+{
+  "value": 8.5
+}
+
+###
+
+### 5. Delete a Rating from a Movie (DELETE)
+# Example movieId: 550 (Fight Club)
+DELETE {{RefitDemo_HostAddress}}/api/MovieDb/movies/550/rating
+Accept: application/json
+
+###
