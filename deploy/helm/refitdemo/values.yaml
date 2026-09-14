@@ -107,7 +107,7 @@ tmdb:
   baseUrl: "https://api.themoviedb.org/3"
   # API Read Access Token (v4 auth JWT starting with 'eyJ')
   # Can be supplied here or injected via existingSecret / Azure Key Vault Provider
-  apiReadAccessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0bWRiIn0.c2lnbmF0dXJl"
+  apiReadAccessToken: "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxODU2ODFjMjg4MmMwMWE0ODM4OTZkMTRlYjFhMGVkZCIsIm5iZiI6MTc4ODc3Mzg1Mi43NTQsInN1YiI6IjZhOWU4NWRjNTFjZTJiMzk4ZjdkNDljYiIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.xCi6bqZs5wc_e7XaGmja4SR89MkOMwiIN82HjVc7ZaY"
   # Set existingSecret if secret is created outside Helm (e.g. SealedSecret, ExternalSecret, or KeyVault)
   existingSecret: ""
 
