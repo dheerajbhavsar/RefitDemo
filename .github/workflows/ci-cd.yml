@@ -14,12 +14,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write   # Required for Azure OIDC Workload Identity Federation
+  id-token: write   # Required when using Azure OIDC Workload Identity Federation
   contents: write   # Required to commit updated image tags to GitOps Helm values
 
 env:
   DOTNET_VERSION: '10.0.x'
   IMAGE_NAME: 'refitdemo'
+  SOLUTION_NAME: 'RefitDemo.sln'
 
 jobs:
   # ============================================================================
@@ -38,16 +39,19 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore NuGet Dependencies
-        run: dotnet restore RefitDemo.sln
+        run: dotnet restore ${{ env.SOLUTION_NAME }}
 
       - name: Build Solution (Release)
-        run: dotnet build RefitDemo.sln --no-restore -c Release
+        run: dotnet build ${{ env.SOLUTION_NAME }} --no-restore -c Release
 
       - name: Run Unit & Integration Tests
-        run: dotnet test RefitDemo.sln --no-build -c Release --verbosity normal
+        run: dotnet test ${{ env.SOLUTION_NAME }} --no-build -c Release --verbosity normal
 
   # ============================================================================
   # Job 2: Build Docker Image & Push to Azure Container Registry (ACR)
+  # Supports BOTH:
+  #   Option A: ACR Username & Password (ACR Admin or Service Principal)
+  #   Option B: Azure OIDC Workload Identity Federation
   # ============================================================================
   docker-acr-build-push:
     name: Build & Push Docker Image to ACR
@@ -65,26 +69,47 @@ jobs:
         id: vars
         run: |
           SHA_SHORT=$(git rev-parse --short HEAD)
+          ACR_NAME="${{ vars.ACR_NAME || secrets.ACR_NAME }}"
           echo "sha_short=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
-          echo "acr_server=${{ secrets.ACR_NAME }}.azurecr.io" >> "$GITHUB_OUTPUT"
-          echo "acr_repo=${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
+          echo "acr_name=${ACR_NAME}" >> "$GITHUB_OUTPUT"
+          echo "acr_server=${ACR_NAME}.azurecr.io" >> "$GITHUB_OUTPUT"
+          echo "acr_repo=${ACR_NAME}.azurecr.io/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
 
-      # Authenticate to Azure via OpenID Connect (OIDC) or Service Principal
-      - name: Azure Login (OIDC Federated Credentials)
+      # ------------------------------------------------------------------------
+      # ACR Authentication Option A: Username / Password (Admin or SP)
+      # Triggered if ACR_USERNAME and ACR_PASSWORD secrets are present
+      # ------------------------------------------------------------------------
+      - name: Log in to ACR (Option A: Username / Password)
+        if: ${{ secrets.ACR_USERNAME != '' && secrets.ACR_PASSWORD != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.vars.outputs.acr_server }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      # ------------------------------------------------------------------------
+      # ACR Authentication Option B: Azure OIDC / CLI (Passwordless fallback)
+      # Triggered if ACR_USERNAME is not set
+      # ------------------------------------------------------------------------
+      - name: Azure Login (Option B: OIDC Federated Credentials)
+        if: ${{ secrets.ACR_USERNAME == '' || secrets.ACR_PASSWORD == '' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID || secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID || secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Log in to Azure Container Registry (ACR)
+      - name: Log in to Azure Container Registry via Azure CLI
+        if: ${{ secrets.ACR_USERNAME == '' || secrets.ACR_PASSWORD == '' }}
         run: |
-          az acr login --name ${{ secrets.ACR_NAME }}
+          az acr login --name ${{ steps.vars.outputs.acr_name }}
 
+      # ------------------------------------------------------------------------
+      # Build and Push Docker Image
+      # ------------------------------------------------------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Builds using the multi-stage Dockerfile and pushes directly to ACR
       - name: Build & Push Docker Image to ACR
         uses: docker/build-push-action@v6
         with:
@@ -121,7 +146,8 @@ jobs:
           sed -i "s/^  tag: .*/  tag: \"$IMAGE_TAG\"/" "$VALUES_FILE"
           
           # Also ensure repository points to the configured ACR
-          sed -i "s|^  repository: .*|  repository: ${{ secrets.ACR_NAME }}.azurecr.io/refitdemo|" "$VALUES_FILE"
+          ACR_NAME="${{ vars.ACR_NAME || secrets.ACR_NAME }}"
+          sed -i "s|^  repository: .*|  repository: ${ACR_NAME}.azurecr.io/refitdemo|" "$VALUES_FILE"
 
       - name: Commit & Push GitOps Changes to Repo
         run: |

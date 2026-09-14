@@ -160,8 +160,84 @@ curl http://localhost:8080/health
 
 ---
 
+## 🚀 CI/CD & GitOps: GitHub Actions Secrets & Variables Guide
+
+The repository includes a production CI/CD workflow ([`.github/workflows/ci-cd.yml`](file:///c:/antigravity/RefitDemo/.github/workflows/ci-cd.yml)) that builds, tests, pushes container images to Azure Container Registry (ACR), and triggers ArgoCD deployments.
+
+### 📍 Where to Configure in GitHub
+
+Navigate to your GitHub repository in your browser:
+```
+Your GitHub Repository
+  └── ⚙️ Settings (top tab)
+        └── 🔐 Secrets and variables (left sidebar)
+              └── ⚡ Actions
+```
+On this page, you will see two tabs: **Secrets** and **Variables**.
+
+```
+[ Secrets ]    [ Variables ]
+    ├── "New repository secret"   <-- For passwords, tokens, private keys (masked in logs)
+    └── "New repository variable" <-- For non-sensitive configs (visible in logs)
+```
+
+---
+
+### 🔑 Configuration Options (Choose Option A or Option B)
+
+The pipeline automatically inspects your repository. You can choose either authentication method:
+
+#### 👉 Option A: Username & Password Authentication (Quickest Setup)
+
+| Configuration Item | Type | Where to Add | Description / Value |
+|---|---|---|---|
+| `ACR_NAME` | **Variable** *(or Secret)* | **Variables** tab > *New repository variable* | Name of your registry, e.g. `acrrefitdemo1001` (without `.azurecr.io`) |
+| `ACR_USERNAME` | **Secret** *(or Variable)* | **Secrets** tab > *New repository secret* | ACR Admin username (from `az acr credential show`) |
+| `ACR_PASSWORD` | **Secret** | **Secrets** tab > *New repository secret* | ACR Admin password (masked) |
+
+> [!TIP]
+> **How to get ACR Username & Password via Azure CLI:**
+> ```bash
+> # 1. Enable admin user
+> az acr update --name <ACR_NAME> --admin-enabled true
+> 
+> # 2. View credentials
+> az acr credential show --name <ACR_NAME> --query "[username, passwords[0].value]" -o tsv
+> ```
+
+---
+
+#### 👉 Option B: Azure OIDC Federated Credentials (Passwordless / Recommended)
+
+| Configuration Item | Type | Where to Add | Description / Value |
+|---|---|---|---|
+| `ACR_NAME` | **Variable** *(or Secret)* | **Variables** tab > *New repository variable* | Name of your registry, e.g. `acrrefitdemo1001` |
+| `AZURE_SUBSCRIPTION_ID` | **Variable** *(or Secret)* | **Variables** tab > *New repository variable* | Your Azure Subscription ID (`az account show --query id -o tsv`) |
+| `AZURE_TENANT_ID` | **Variable** *(or Secret)* | **Variables** tab > *New repository variable* | Your Azure Tenant ID (`az account show --query tenantId -o tsv`) |
+| `AZURE_CLIENT_ID` | **Secret** | **Secrets** tab > *New repository secret* | App Registration Application (Client) ID |
+
+---
+
+### 🌍 Repository Scope vs. Environment Scope
+
+GitHub allows configuring settings at two scopes:
+
+1. **Repository Secrets & Variables** *(Default & Simplest)*:
+   - Available to all workflow runs across branches.
+   - Configured under: `Settings` > `Secrets and variables` > `Actions`.
+2. **Environment Secrets & Variables** *(Advanced / Multi-Environment)*:
+   - Configured under: `Settings` > `Environments` > Create environment (e.g. `Production` or `Staging`).
+   - Allows setting **deployment protection rules** (e.g. required reviewers / manual approval before deploying to Production).
+   - If configured in an environment, reference `environment: Production` in your workflow job.
+
+> [!NOTE]
+> The workflow in this project supports both `${{ vars.ACR_NAME }}` and `${{ secrets.ACR_NAME }}` interchangeably. If you place all values into **Secrets**, it will work immediately!
+
+---
+
 ## 📝 Article References
 
 - Original Medium Article: [Using Refit in .NET](https://medium.com/net-core/using-refit-in-net-0843bb199987) by Sena Kılıçarslan
 - Original Repository: [AspNetCoreRefitDemo](https://github.com/kilicars/AspNetCoreRefitDemo)
 - Official Refit Documentation: [ReactiveUI Refit](https://github.com/reactiveui/refit)
+

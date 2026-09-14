@@ -11,6 +11,16 @@ image:
   tag: "latest"
 
 imagePullSecrets: []
+
+# Optional: Generate a docker-registry secret from Username & Password
+# Useful when AKS is NOT attached via managed identity or pulling from external ACR
+imageCredentials:
+  create: false
+  registry: refitdemo.azurecr.io
+  username: ""
+  password: ""
+  secretName: refitdemo-acr-pull-secret
+
 nameOverride: ""
 fullnameOverride: ""
 

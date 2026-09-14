@@ -1,4 +1,35 @@
 <Solution>
+  <Folder Name="/.github/" />
+  <Folder Name="/.github/workflows/">
+    <File Path=".github/workflows/ci-cd.yml" />
+  </Folder>
+  <Folder Name="/Deploy/">
+    <File Path="deploy/README.md" />
+  </Folder>
+  <Folder Name="/Deploy/aks/">
+    <File Path="deploy/aks/setup-aks-acr.ps1" />
+    <File Path="deploy/aks/setup-aks-acr.sh" />
+  </Folder>
+  <Folder Name="/Deploy/argocd/">
+    <File Path="deploy/argocd/application.yaml" />
+    <File Path="deploy/argocd/bootstrap-argocd.ps1" />
+    <File Path="deploy/argocd/bootstrap-argocd.sh" />
+  </Folder>
+  <Folder Name="/Deploy/helm/" />
+  <Folder Name="/Deploy/helm/refitdemo/">
+    <File Path="deploy/helm/refitdemo/Chart.yaml" />
+    <File Path="deploy/helm/refitdemo/values.yaml" />
+  </Folder>
+  <Folder Name="/Deploy/helm/refitdemo/templates/">
+    <File Path="deploy/helm/refitdemo/templates/deployment.yaml" />
+    <File Path="deploy/helm/refitdemo/templates/hpa.yaml" />
+    <File Path="deploy/helm/refitdemo/templates/imagepullsecret.yaml" />
+    <File Path="deploy/helm/refitdemo/templates/ingress.yaml" />
+    <File Path="deploy/helm/refitdemo/templates/secret.yaml" />
+    <File Path="deploy/helm/refitdemo/templates/service.yaml" />
+    <File Path="deploy/helm/refitdemo/templates/serviceaccount.yaml" />
+    <File Path="deploy/helm/refitdemo/templates/_helpers.tpl" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".dockerignore" />
     <File Path=".env" />

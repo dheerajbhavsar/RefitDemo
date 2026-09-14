@@ -110,41 +110,78 @@ The script automatically:
 
 ---
 
-### Step 2: Configure GitHub Actions Secrets & Azure OIDC
+### Step 2: Configure GitHub Actions Secrets & Variables (Choose Option A or Option B)
 
-In your GitHub repository, navigate to **Settings** > **Secrets and variables** > **Actions** and add the following repository secrets:
-
-| Secret Name | Description | Example / Source |
-|---|---|---|
-| `ACR_NAME` | The name of your Azure Container Registry | e.g. `acrrefitdemo1001` (without `.azurecr.io`) |
-| `AZURE_CLIENT_ID` | App Registration Client ID for GitHub OIDC | From Azure App Registration |
-| `AZURE_TENANT_ID` | Azure Active Directory Tenant ID | `az account show --query tenantId -o tsv` |
-| `AZURE_SUBSCRIPTION_ID` | Azure Subscription ID | `az account show --query id -o tsv` |
-
-#### (Recommended) Configuring Azure OIDC Federated Credential
-To allow GitHub Actions to authenticate passwordlessly without long-lived secret keys:
-```bash
-# 1. Create Azure AD Application & Service Principal
-APP_ID=$(az ad app create --display-name "github-actions-refitdemo" --query appId -o tsv)
-az ad sp create --id "$APP_ID"
-
-# 2. Grant Contributor role on the Resource Group
-az role assignment create \
-  --role "Contributor" \
-  --assignee "$APP_ID" \
-  --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/rg-refitdemo-prod"
-
-# 3. Add Federated Credential for GitHub repository
-az ad app federated-credential create \
-  --id "$APP_ID" \
-  --parameters "{
-    \"name\": \"github-actions-main\",
-    \"issuer\": \"https://token.actions.githubusercontent.com\",
-    \"subject\": \"repo:<YOUR_GITHUB_USER_OR_ORG>/RefitDemo:ref:refs/heads/main\",
-    \"description\": \"GitHub Actions OIDC\",
-    \"audiences\": [\"api://AzureADTokenExchange\"]
-  }"
+Navigate in your GitHub repository:
 ```
+Your GitHub Repository -> ⚙️ Settings -> 🔐 Secrets and variables -> ⚡ Actions
+```
+On this screen, you will see two tabs:
+* **Secrets tab**: For sensitive values (passwords, tokens, private keys) which are automatically masked in workflow logs.
+* **Variables tab**: For non-sensitive configuration values (registry names, tenant IDs).
+
+> [!TIP]
+> The workflow in this project supports reading `ACR_NAME`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` from **either** the **Variables** tab or the **Secrets** tab (`${{ vars.ACR_NAME || secrets.ACR_NAME }}`). If in doubt, placing all items under **Secrets** will work immediately.
+
+---
+
+#### 👉 Option A: Username & Password Authentication (Quickest Setup)
+
+1. Enable the Admin user on your Azure Container Registry:
+   ```bash
+   az acr update --name <ACR_NAME> --admin-enabled true
+   ```
+2. Retrieve the username and password:
+   ```bash
+   az acr credential show --name <ACR_NAME> --query "[username, passwords[0].value]" -o tsv
+   ```
+3. Add the following in GitHub:
+
+   | Name | Type | Where to Add | Description / Source |
+   |---|---|---|---|
+   | `ACR_NAME` | **Variable** *(or Secret)* | **Variables** tab > *New repository variable* | Name of your registry (e.g. `acrrefitdemo1001`) |
+   | `ACR_USERNAME` | **Secret** *(or Variable)* | **Secrets** tab > *New repository secret* | ACR Admin username from step 2 |
+   | `ACR_PASSWORD` | **Secret** | **Secrets** tab > *New repository secret* | ACR Admin password from step 2 (masked) |
+
+*(Note: If `ACR_USERNAME` and `ACR_PASSWORD` are set, GitHub Actions logs in directly via Docker without needing Azure CLI or Azure subscription secrets).*
+
+---
+
+#### 👉 Option B: Azure OIDC Workload Identity Federation (Passwordless & Enterprise)
+
+If you prefer passwordless cloud federation:
+1. Add the following in GitHub:
+
+   | Name | Type | Where to Add | Description / Source |
+   |---|---|---|---|
+   | `ACR_NAME` | **Variable** *(or Secret)* | **Variables** tab > *New repository variable* | Name of your registry (e.g. `acrrefitdemo1001`) |
+   | `AZURE_SUBSCRIPTION_ID` | **Variable** *(or Secret)* | **Variables** tab > *New repository variable* | `az account show --query id -o tsv` |
+   | `AZURE_TENANT_ID` | **Variable** *(or Secret)* | **Variables** tab > *New repository variable* | `az account show --query tenantId -o tsv` |
+   | `AZURE_CLIENT_ID` | **Secret** | **Secrets** tab > *New repository secret* | App Registration Client ID |
+
+2. Configure the Federated Credential in Azure:
+   ```bash
+   # 1. Create Azure AD Application & Service Principal
+   APP_ID=$(az ad app create --display-name "github-actions-refitdemo" --query appId -o tsv)
+   az ad sp create --id "$APP_ID"
+
+   # 2. Grant Contributor / AcrPush role
+   az role assignment create \
+     --role "AcrPush" \
+     --assignee "$APP_ID" \
+     --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/rg-refitdemo-prod/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME"
+
+   # 3. Add Federated Credential for GitHub repository
+   az ad app federated-credential create \
+     --id "$APP_ID" \
+     --parameters "{
+       \"name\": \"github-actions-main\",
+       \"issuer\": \"https://token.actions.githubusercontent.com\",
+       \"subject\": \"repo:<YOUR_GITHUB_USER_OR_ORG>/RefitDemo:ref:refs/heads/main\",
+       \"description\": \"GitHub Actions OIDC\",
+       \"audiences\": [\"api://AzureADTokenExchange\"]
+     }"
+   ```
 
 ---
 

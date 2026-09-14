@@ -83,10 +83,22 @@ $tenantId = az account show --query tenantId -o tsv
 Write-Host "`n==============================================================================" -ForegroundColor Green
 Write-Host "🎉 Infrastructure Setup Complete!" -ForegroundColor Green
 Write-Host "==============================================================================" -ForegroundColor Green
-Write-Host "🔑 Required GitHub Actions Secrets to configure in your repo:"
-Write-Host "   - ACR_NAME:              $AcrName" -ForegroundColor Yellow
-Write-Host "   - AZURE_SUBSCRIPTION_ID: $subscriptionId" -ForegroundColor Yellow
-Write-Host "   - AZURE_TENANT_ID:       $tenantId" -ForegroundColor Yellow
+Write-Host "`n🔐 Authentication Options for GitHub Actions & Kubernetes:" -ForegroundColor Cyan
+Write-Host "`n👉 Option 1: Username & Password Authentication" -ForegroundColor Yellow
+Write-Host "   Enable ACR Admin account:"
+Write-Host "     az acr update --name $AcrName --admin-enabled true"
+Write-Host "   Retrieve credentials:"
+Write-Host "     az acr credential show --name $AcrName --query '[username, passwords[0].value]' -o tsv"
+Write-Host "   Configure GitHub Secrets:"
+Write-Host "     - ACR_NAME:     $AcrName"
+Write-Host "     - ACR_USERNAME: (username from above command)"
+Write-Host "     - ACR_PASSWORD: (password from above command)"
+Write-Host "`n👉 Option 2: Azure OIDC Federated Credentials (Passwordless)" -ForegroundColor Yellow
+Write-Host "   Configure GitHub Secrets:"
+Write-Host "     - ACR_NAME:              $AcrName"
+Write-Host "     - AZURE_SUBSCRIPTION_ID: $subscriptionId"
+Write-Host "     - AZURE_TENANT_ID:       $tenantId"
+Write-Host "     - AZURE_CLIENT_ID:       <YOUR_AZURE_APP_CLIENT_ID>"
 Write-Host "`n👉 Next Step: Run the ArgoCD Bootstrap Script to install GitOps:"
 Write-Host "   .\deploy\argocd\bootstrap-argocd.ps1 -GitRepoUrl <YOUR_GITHUB_REPO_URL>"
 Write-Host "=============================================================================="
