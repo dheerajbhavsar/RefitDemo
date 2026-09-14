@@ -2,6 +2,7 @@
 
 A modern implementation of the tutorial **"Using Refit in .NET"** by Sena Kılıçarslan, upgraded to **.NET 10** and the latest **Refit v15.2.0** library.
 
+[![CI/CD Pipeline - Build, Test, ACR Push & GitOps Deploy](https://github.com/dheerajbhavsar/RefitDemo/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/dheerajbhavsar/RefitDemo/actions/workflows/ci-cd.yml)
 ---
 
 ## 📖 Overview
