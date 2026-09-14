@@ -25,7 +25,6 @@ spec:
     automated:
       prune: true       # Delete resources removed from Helm chart
       selfHeal: true    # Overwrite manual cluster drift back to Git state
-      createNamespace: true  # Automatically create the namespace if it doesn't exist
     syncOptions:
       - CreateNamespace=true
       - ApplyOutOfSyncOnly=true
