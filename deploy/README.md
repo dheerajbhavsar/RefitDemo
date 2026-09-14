@@ -224,13 +224,19 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 Once set up, your continuous deployment pipeline runs completely automatically:
 
 ```
-Developer commits to main
+Developer commits to main (or triggers workflow dispatch)
        ↓
 GitHub Actions runs 'build-and-test' (.NET 10 compilation & tests)
        ↓
-GitHub Actions builds Docker image & pushes to ACR (tags: <sha>, latest)
+GitHub Actions calculates SemVer build number (e.g. 1.0.0, 1.0.1, or manual override)
        ↓
-GitHub Actions updates 'tag:' in deploy/helm/refitdemo/values.yaml and pushes commit
+GitHub Actions builds Docker image & pushes to ACR:
+  - <ACR_NAME>.azurecr.io/refitdemo:1.0.0 (Semantic Version build tag)
+  - <ACR_NAME>.azurecr.io/refitdemo:1.0   (Major.Minor floating tag)
+  - <ACR_NAME>.azurecr.io/refitdemo:latest
+  - <ACR_NAME>.azurecr.io/refitdemo:sha-<commit>
+       ↓
+GitHub Actions updates 'tag: "1.0.0"' in deploy/helm/refitdemo/values.yaml and pushes Git commit
        ↓
 ArgoCD detects Git commit, compares with live AKS state, and automatically syncs!
        ↓

@@ -12,6 +12,11 @@ on:
       - '**.md'
       - '.gitignore'
   workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Semantic Version override (e.g. 1.0.0). Leave blank for auto-calculated version.'
+        required: false
+        default: ''
 
 permissions:
   id-token: write   # Required when using Azure OIDC Workload Identity Federation
@@ -21,6 +26,8 @@ env:
   DOTNET_VERSION: '10.0.x'
   IMAGE_NAME: 'refitdemo'
   SOLUTION_NAME: 'RefitDemo.sln'
+  VERSION_MAJOR: '1'
+  VERSION_MINOR: '0'
 
 jobs:
   # ============================================================================
@@ -56,10 +63,10 @@ jobs:
   docker-acr-build-push:
     name: Build & Push Docker Image to ACR
     needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
-      image_tag: ${{ steps.vars.outputs.sha_short }}
+      image_tag: ${{ steps.vars.outputs.image_tag }}
       image_repository: ${{ steps.vars.outputs.acr_repo }}
     env:
       ACR_NAME: ${{ vars.ACR_NAME || secrets.ACR_NAME }}
@@ -69,10 +76,24 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Calculate Short SHA & Repository Variables
+      - name: Calculate SemVer Image Tag & Repository Variables
         id: vars
         run: |
           SHA_SHORT=$(git rev-parse --short HEAD)
+          
+          # Calculate Semantic Version build number: Major.Minor.Patch (e.g. 1.0.0)
+          if [ -n "${{ github.event.inputs.version_override }}" ]; then
+            BUILD_VERSION="${{ github.event.inputs.version_override }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            BUILD_VERSION="${GITHUB_REF_NAME#v}"
+          else
+            # Derive patch number from GitHub run number (0-indexed: run 1 -> 1.0.0, run 2 -> 1.0.1)
+            PATCH=$(( GITHUB_RUN_NUMBER - 1 ))
+            BUILD_VERSION="${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.${PATCH}"
+          fi
+          
+          echo "Building image version: ${BUILD_VERSION} (commit: ${SHA_SHORT})"
+          echo "image_tag=${BUILD_VERSION}" >> "$GITHUB_OUTPUT"
           echo "sha_short=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
           echo "acr_name=${ACR_NAME}" >> "$GITHUB_OUTPUT"
           echo "acr_server=${ACR_NAME}.azurecr.io" >> "$GITHUB_OUTPUT"
@@ -120,9 +141,10 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ steps.vars.outputs.acr_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ steps.vars.outputs.acr_server }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+            ${{ steps.vars.outputs.acr_server }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.image_tag }}
+            ${{ steps.vars.outputs.acr_server }}/${{ env.IMAGE_NAME }}:${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}
             ${{ steps.vars.outputs.acr_server }}/${{ env.IMAGE_NAME }}:latest
+            ${{ steps.vars.outputs.acr_server }}/${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.sha_short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -132,7 +154,7 @@ jobs:
   update-gitops-helm:
     name: Promote Image Tag to GitOps Helm Chart
     needs: docker-acr-build-push
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       ACR_NAME: ${{ vars.ACR_NAME || secrets.ACR_NAME }}

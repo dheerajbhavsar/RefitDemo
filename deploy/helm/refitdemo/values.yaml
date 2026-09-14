@@ -8,7 +8,7 @@ image:
   # Automatically updated by GitHub Actions GitOps workflow
   repository: refitdemo.azurecr.io/refitdemo
   pullPolicy: IfNotPresent
-  tag: "latest"
+  tag: "1.0.0"
 
 imagePullSecrets: []
 
