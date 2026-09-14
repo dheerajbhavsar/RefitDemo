@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup .NET SDK ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v4
@@ -74,7 +74,7 @@ jobs:
       ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Calculate SemVer Image Tag & Repository Variables
         id: vars
