@@ -20,6 +20,8 @@ permissions:
 env:
   DOTNET_VERSION: '10.0.x'
   IMAGE_NAME: 'refitdemo'
+  SOLUTION_NAME: 'RefitDemo.sln'
+  PROJECT_NAME: 'RefitDemo.csproj'
 
 jobs:
   # ============================================================================
@@ -41,10 +43,10 @@ jobs:
         run: dotnet restore RefitDemo.sln
 
       - name: Build Solution (Release)
-        run: dotnet build RefitDemo.sln --no-restore -c Release
+        run: dotnet build ${{ env.SOLUTION_NAME }} --no-restore -c Release
 
       - name: Run Unit & Integration Tests
-        run: dotnet test RefitDemo.sln --no-build -c Release --verbosity normal
+        run: dotnet test ${{ env.SOLUTION_NAME }} --no-build -c Release --verbosity normal
 
   # ============================================================================
   # Job 2: Build Docker Image & Push to Azure Container Registry (ACR)
