@@ -1,0 +1,16 @@
+apiVersion: v2
+name: refitdemo
+description: Production-grade Helm Chart for RefitDemo .NET 10 Web API on AKS
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - dotnet10
+  - refit
+  - tmdb
+  - gitops
+  - argocd
+home: https://github.com/
+maintainers:
+  - name: Platform Team
+    email: devops@example.com

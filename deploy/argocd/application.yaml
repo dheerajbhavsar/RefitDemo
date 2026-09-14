@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: refitdemo
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: refitdemo
+    app.kubernetes.io/part-of: refitdemo-platform
+spec:
+  project: default
+  source:
+    # Replace with your actual Git repository URL (e.g. https://github.com/your-org/RefitDemo.git)
+    repoURL: https://github.com/dheeraj-89/RefitDemo.git
+    targetRevision: main
+    path: deploy/helm/refitdemo
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: refitdemo
+  syncPolicy:
+    automated:
+      prune: true       # Delete resources removed from Helm chart
+      selfHeal: true    # Overwrite manual cluster drift back to Git state
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

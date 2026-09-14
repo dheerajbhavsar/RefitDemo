@@ -1,0 +1,113 @@
+# Default values for refitdemo Helm Chart.
+# This is a YAML-formatted file.
+
+replicaCount: 2
+
+image:
+  # Replace with your ACR server (e.g. myacr.azurecr.io/refitdemo)
+  # Automatically updated by GitHub Actions GitOps workflow
+  repository: refitdemo.azurecr.io/refitdemo
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+# Pod Security Context - Non-Root enforcement (app user UID 1654)
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1654
+  runAsGroup: 1654
+  fsGroup: 1654
+
+# Container Security Context - Zero-Trust Hardening
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: "webapprouting.kubernetes.azure.com" # Default AKS Application Routing / NGINX ingress class
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: refitdemo.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: refitdemo-tls
+      hosts:
+        - refitdemo.example.com
+
+# Production Resource Guarantees & Limits
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Horizontal Pod Autoscaling (HPA)
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 80
+
+# Liveness & Readiness Probes mapped to ASP.NET Core Health Checks
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 2
+
+# TMDB Configuration
+tmdb:
+  baseUrl: "https://api.themoviedb.org/3"
+  # API Read Access Token (v4 auth JWT starting with 'eyJ')
+  # Can be supplied here or injected via existingSecret / Azure Key Vault Provider
+  apiReadAccessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0bWRiIn0.c2lnbmF0dXJl"
+  # Set existingSecret if secret is created outside Helm (e.g. SealedSecret, ExternalSecret, or KeyVault)
+  existingSecret: ""
+
+# Additional environment variables
+env:
+  - name: ASPNETCORE_ENVIRONMENT
+    value: "Production"
+  - name: DOTNET_EnableDiagnostics
+    value: "0"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

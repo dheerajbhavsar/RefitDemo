@@ -1,0 +1,139 @@
+name: CI/CD Pipeline - Build, Test, ACR Push & GitOps Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # Required for Azure OIDC Workload Identity Federation
+  contents: write   # Required to commit updated image tags to GitOps Helm values
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  IMAGE_NAME: 'refitdemo'
+
+jobs:
+  # ============================================================================
+  # Job 1: Build & Automated Testing (.NET 10)
+  # ============================================================================
+  build-and-test:
+    name: Build & Test (.NET 10)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore NuGet Dependencies
+        run: dotnet restore RefitDemo.sln
+
+      - name: Build Solution (Release)
+        run: dotnet build RefitDemo.sln --no-restore -c Release
+
+      - name: Run Unit & Integration Tests
+        run: dotnet test RefitDemo.sln --no-build -c Release --verbosity normal
+
+  # ============================================================================
+  # Job 2: Build Docker Image & Push to Azure Container Registry (ACR)
+  # ============================================================================
+  docker-acr-build-push:
+    name: Build & Push Docker Image to ACR
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.vars.outputs.sha_short }}
+      image_repository: ${{ steps.vars.outputs.acr_repo }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Calculate Short SHA & Repository Variables
+        id: vars
+        run: |
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          echo "sha_short=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+          echo "acr_server=${{ secrets.ACR_NAME }}.azurecr.io" >> "$GITHUB_OUTPUT"
+          echo "acr_repo=${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
+
+      # Authenticate to Azure via OpenID Connect (OIDC) or Service Principal
+      - name: Azure Login (OIDC Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to Azure Container Registry (ACR)
+        run: |
+          az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Builds using the multi-stage Dockerfile and pushes directly to ACR
+      - name: Build & Push Docker Image to ACR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.acr_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ steps.vars.outputs.acr_server }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+            ${{ steps.vars.outputs.acr_server }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================================
+  # Job 3: GitOps Promotion - Update Helm values.yaml image tag
+  # ============================================================================
+  update-gitops-helm:
+    name: Promote Image Tag to GitOps Helm Chart
+    needs: docker-acr-build-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code (with write permissions)
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Helm Chart values.yaml
+        run: |
+          IMAGE_TAG="${{ needs.docker-acr-build-push.outputs.image_tag }}"
+          VALUES_FILE="deploy/helm/refitdemo/values.yaml"
+          
+          echo "Updating $VALUES_FILE to image tag: $IMAGE_TAG"
+          sed -i "s/^  tag: .*/  tag: \"$IMAGE_TAG\"/" "$VALUES_FILE"
+          
+          # Also ensure repository points to the configured ACR
+          sed -i "s|^  repository: .*|  repository: ${{ secrets.ACR_NAME }}.azurecr.io/refitdemo|" "$VALUES_FILE"
+
+      - name: Commit & Push GitOps Changes to Repo
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add deploy/helm/refitdemo/values.yaml
+          
+          # Only commit if changes exist
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(gitops): update refitdemo image tag to ${{ needs.docker-acr-build-push.outputs.image_tag }} [skip ci]"
+            git push origin main
+          else
+            echo "No changes to commit in values.yaml."
+          fi
