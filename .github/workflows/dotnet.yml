@@ -21,8 +21,8 @@ jobs:
       with:
         dotnet-version: 10.0.x
     - name: Restore dependencies
-      run: dotnet restore **/*.sln
+      run: dotnet restore **/*.csproj
     - name: Build
-      run: dotnet build -c release **/*.sln --no-restore
+      run: dotnet build -c release **/*.csproj --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
