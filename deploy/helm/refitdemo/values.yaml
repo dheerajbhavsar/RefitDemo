@@ -6,9 +6,9 @@ replicaCount: 2
 image:
   # Replace with your ACR server (e.g. myacr.azurecr.io/refitdemo)
   # Automatically updated by GitHub Actions GitOps workflow
-  repository: refitdemo.azurecr.io/refitdemo
+  repository: abbaisacrcin001.azurecr.io/refitdemo
   pullPolicy: IfNotPresent
-  tag: "1.0.0"
+  tag: "latest"
 
 imagePullSecrets: []
 
