@@ -61,6 +61,10 @@ jobs:
     outputs:
       image_tag: ${{ steps.vars.outputs.sha_short }}
       image_repository: ${{ steps.vars.outputs.acr_repo }}
+    env:
+      ACR_NAME: ${{ vars.ACR_NAME || secrets.ACR_NAME }}
+      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -69,7 +73,6 @@ jobs:
         id: vars
         run: |
           SHA_SHORT=$(git rev-parse --short HEAD)
-          ACR_NAME="${{ vars.ACR_NAME || secrets.ACR_NAME }}"
           echo "sha_short=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
           echo "acr_name=${ACR_NAME}" >> "$GITHUB_OUTPUT"
           echo "acr_server=${ACR_NAME}.azurecr.io" >> "$GITHUB_OUTPUT"
@@ -79,20 +82,20 @@ jobs:
       # ACR Authentication Option A: Username / Password (Admin or SP)
       # Triggered if ACR_USERNAME and ACR_PASSWORD secrets are present
       # ------------------------------------------------------------------------
-      - name: Log in to ACR (Option A: Username / Password)
-        if: ${{ secrets.ACR_USERNAME != '' && secrets.ACR_PASSWORD != '' }}
+      - name: "Log in to ACR (Option A: Username / Password)"
+        if: env.ACR_USERNAME != '' && env.ACR_PASSWORD != ''
         uses: docker/login-action@v3
         with:
           registry: ${{ steps.vars.outputs.acr_server }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          username: ${{ env.ACR_USERNAME }}
+          password: ${{ env.ACR_PASSWORD }}
 
       # ------------------------------------------------------------------------
       # ACR Authentication Option B: Azure OIDC / CLI (Passwordless fallback)
       # Triggered if ACR_USERNAME is not set
       # ------------------------------------------------------------------------
-      - name: Azure Login (Option B: OIDC Federated Credentials)
-        if: ${{ secrets.ACR_USERNAME == '' || secrets.ACR_PASSWORD == '' }}
+      - name: "Azure Login (Option B: OIDC Federated Credentials)"
+        if: env.ACR_USERNAME == '' || env.ACR_PASSWORD == ''
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -100,7 +103,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID || secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Log in to Azure Container Registry via Azure CLI
-        if: ${{ secrets.ACR_USERNAME == '' || secrets.ACR_PASSWORD == '' }}
+        if: env.ACR_USERNAME == '' || env.ACR_PASSWORD == ''
         run: |
           az acr login --name ${{ steps.vars.outputs.acr_name }}
 
@@ -131,6 +134,8 @@ jobs:
     needs: docker-acr-build-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    env:
+      ACR_NAME: ${{ vars.ACR_NAME || secrets.ACR_NAME }}
     steps:
       - name: Checkout Code (with write permissions)
         uses: actions/checkout@v4
@@ -145,8 +150,7 @@ jobs:
           echo "Updating $VALUES_FILE to image tag: $IMAGE_TAG"
           sed -i "s/^  tag: .*/  tag: \"$IMAGE_TAG\"/" "$VALUES_FILE"
           
-          # Also ensure repository points to the configured ACR
-          ACR_NAME="${{ vars.ACR_NAME || secrets.ACR_NAME }}"
+          echo "Updating $VALUES_FILE to repository: ${ACR_NAME}.azurecr.io/refitdemo"
           sed -i "s|^  repository: .*|  repository: ${ACR_NAME}.azurecr.io/refitdemo|" "$VALUES_FILE"
 
       - name: Commit & Push GitOps Changes to Repo
