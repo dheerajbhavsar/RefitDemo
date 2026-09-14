@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: refitdemo:1.0.0
+    container_name: refitdemo-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_HTTP_PORTS=8080
+      - DOTNET_EnableDiagnostics=0
+      - Tmdb__BaseUrl=https://api.themoviedb.org/3
+      # Supply your TMDB Read Access Token here or via a .env file
+      - Tmdb__ApiReadAccessToken=${TMDB_API_READ_ACCESS_TOKEN:-}
+    # Production security & resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

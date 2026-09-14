@@ -15,16 +15,16 @@ public interface ITmdbApi
     /// Search for an actor/actress by name.
     /// GET /search/person?query={name}
     /// </summary>
-    [Get("/search/person?query={name}")]
-    Task<ActorList> GetActors(string name);
+    [Get("/search/person")]
+    Task<ActorList> GetActors([AliasAs("query")] string name);
 
     /// <summary>
     /// Search for an actor/actress by name with ApiResponse&lt;T&gt; wrapper
     /// which provides HTTP status, headers, raw response, and error details.
     /// GET /search/person?query={name}
     /// </summary>
-    [Get("/search/person?query={name}")]
-    Task<ApiResponse<ActorList>> GetActorsWithResponse(string name);
+    [Get("/search/person")]
+    Task<ApiResponse<ActorList>> GetActorsWithResponse([AliasAs("query")] string name);
 
     /// <summary>
     /// Get the movie credits of an actor/actress.

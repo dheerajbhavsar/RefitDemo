@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Refit;
 using RefitDemo.Controllers;
 using RefitDemo.Models;
 using RefitDemo.Services;
-using System.Net;
 using Xunit;
 
 namespace RefitDemo.Tests;
@@ -14,17 +15,26 @@ public class MovieDbControllerTests
 {
     private readonly ITmdbApi _tmdbApi;
     private readonly ILogger<MovieDbController> _logger;
+    private readonly HybridCache _cache;
     private readonly MovieDbController _controller;
 
     public MovieDbControllerTests()
     {
         _tmdbApi = Substitute.For<ITmdbApi>();
         _logger = Substitute.For<ILogger<MovieDbController>>();
-        _controller = new MovieDbController(_tmdbApi, _logger);
+
+#pragma warning disable EXTEXP0018
+        var services = new ServiceCollection();
+        services.AddHybridCache();
+        var serviceProvider = services.BuildServiceProvider();
+        _cache = serviceProvider.GetRequiredService<HybridCache>();
+#pragma warning restore EXTEXP0018
+
+        _controller = new MovieDbController(_tmdbApi, _cache, _logger);
     }
 
     [Fact]
-    public async Task GetActors_ReturnsOk_WithActorList()
+    public async Task GetActors_ReturnsOk_WithActorList_AndCachesResult()
     {
         // Arrange
         var expected = new ActorList
@@ -33,18 +43,24 @@ public class MovieDbControllerTests
         };
         _tmdbApi.GetActors("Tom Hanks").Returns(Task.FromResult(expected));
 
-        // Act
-        var result = await _controller.GetActors("Tom Hanks");
+        // Act 1: Initial call (populates cache)
+        var result1 = await _controller.GetActors("Tom Hanks");
+
+        // Act 2: Second call (should be served from HybridCache L1 memory)
+        var result2 = await _controller.GetActors("Tom Hanks");
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var okResult = Assert.IsType<OkObjectResult>(result1.Result);
         var actual = Assert.IsType<ActorList>(okResult.Value);
         Assert.Single(actual.Actors);
         Assert.Equal("Tom Hanks", actual.Actors[0].Name);
+
+        // TMDB Refit API should only have been called ONCE due to HybridCache!
+        await _tmdbApi.Received(1).GetActors("Tom Hanks");
     }
 
     [Fact]
-    public async Task GetMovies_ReturnsOk_WithMovieList()
+    public async Task GetMovies_ReturnsOk_WithMovieList_AndCachesResult()
     {
         // Arrange
         var expected = new MovieList
@@ -53,18 +69,24 @@ public class MovieDbControllerTests
         };
         _tmdbApi.GetMovies(287).Returns(Task.FromResult(expected));
 
-        // Act
-        var result = await _controller.GetMovies(287);
+        // Act 1: Initial call
+        var result1 = await _controller.GetMovies(287);
+
+        // Act 2: Second call
+        var result2 = await _controller.GetMovies(287);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var okResult = Assert.IsType<OkObjectResult>(result1.Result);
         var actual = Assert.IsType<MovieList>(okResult.Value);
         Assert.Single(actual.Movies);
         Assert.Equal("Fight Club", actual.Movies[0].Title);
+
+        // Refit API should only be called once due to caching
+        await _tmdbApi.Received(1).GetMovies(287);
     }
 
     [Fact]
-    public async Task AddRating_ReturnsOk_WithResponseBody()
+    public async Task AddRating_ReturnsOk_AndInvalidatesMovieCacheTags()
     {
         // Arrange
         var rating = new Rating { Value = 8.5m };

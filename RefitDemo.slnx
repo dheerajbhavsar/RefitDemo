@@ -1,4 +1,13 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".dockerignore" />
+    <File Path=".env" />
+    <File Path=".gitignore" />
+    <File Path="docker-compose.yml" />
+    <File Path="Dockerfile" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+  </Folder>
   <Project Path="RefitDemo.Tests/RefitDemo.Tests.csproj" />
   <Project Path="RefitDemo/RefitDemo.csproj" />
 </Solution>

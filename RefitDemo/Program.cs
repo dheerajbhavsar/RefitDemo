@@ -1,4 +1,7 @@
+using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Options;
 using Refit;
+using RefitDemo.Configuration;
 using RefitDemo.Services;
 using Scalar.AspNetCore;
 
@@ -7,29 +10,50 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 
+// Configure health checks for container orchestration (Kubernetes / Docker)
+builder.Services.AddHealthChecks();
+
 // Configure OpenAPI for API exploration
 builder.Services.AddOpenApi();
 
-// Read TMDB API configuration
-var tmdbConfig = builder.Configuration.GetSection("Tmdb");
-var baseUrl = tmdbConfig["BaseUrl"] ?? "https://api.themoviedb.org/3";
-var authToken = tmdbConfig["ApiReadAccessToken"] ?? string.Empty;
-
-// Configure Refit settings with Authorization Header Value Getter (ValueTask in Refit v15+)
-var refitSettings = new RefitSettings
+// Register and configure .NET 10 HybridCache (L1 Memory Cache + L2 Distributed with Stampede Protection)
+#pragma warning disable EXTEXP0018 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+builder.Services.AddHybridCache(options =>
 {
-    AuthorizationHeaderValueGetter = (request, cancellationToken) => new ValueTask<string>(authToken)
-};
-
-// Register Refit client with HttpClientFactory
-builder.Services
-    .AddRefitClient<ITmdbApi>(refitSettings)
-    .ConfigureHttpClient(client =>
+    options.DefaultEntryOptions = new HybridCacheEntryOptions
     {
-        client.BaseAddress = new Uri(baseUrl);
+        Expiration = TimeSpan.FromMinutes(10),
+        LocalCacheExpiration = TimeSpan.FromMinutes(10)
+    };
+});
+#pragma warning restore EXTEXP0018
+
+// Register and validate TMDB options on startup (Fail-Fast: Gold Standard)
+builder.Services.AddOptions<TmdbOptions>()
+    .BindConfiguration(TmdbOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+// Register Refit client using validated IOptions<TmdbOptions>
+builder.Services
+    .AddRefitClient<ITmdbApi>(serviceProvider =>
+    {
+        var tmdbOptions = serviceProvider.GetRequiredService<IOptions<TmdbOptions>>().Value;
+        return new RefitSettings
+        {
+            AuthorizationHeaderValueGetter = (request, cancellationToken) => new ValueTask<string>(tmdbOptions.ApiReadAccessToken)
+        };
+    })
+    .ConfigureHttpClient((serviceProvider, client) =>
+    {
+        var tmdbOptions = serviceProvider.GetRequiredService<IOptions<TmdbOptions>>().Value;
+        client.BaseAddress = new Uri(tmdbOptions.BaseUrl);
     });
 
 var app = builder.Build();
+
+// Health check endpoint for Docker / Kubernetes liveness & readiness probes
+app.MapHealthChecks("/health");
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -41,8 +65,6 @@ if (app.Environment.IsDevelopment())
                .WithTheme(ScalarTheme.Moon);
     });
 }
-
-app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
